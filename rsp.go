@@ -1,21 +1,23 @@
 package rsp
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"reflect"
 )
 
 const MsgSuccess = "Success"
 const MsgFailed = "Failed"
 
-func JsonpOk(ctx *gin.Context, args ...interface{}) {
+func JsonpOK(ctx *gin.Context, args ...interface{}) {
 	data, msg := makeOkData(args...)
 	ctx.JSONP(http.StatusOK, jsonBaseFormat(0, msg, data))
 }
 
 func JsonpErr(ctx *gin.Context, args ...interface{}) {
-	data, msg := makeOkData(args...)
-	ctx.JSON(http.StatusOK, jsonBaseFormat(1, msg, data))
+	data, msg, code := makeErrData(args...)
+	ctx.JSONP(http.StatusOK, jsonBaseFormat(code, msg.Error(), data))
 }
 
 func makeOkData(args ...interface{}) (interface{}, string) {
@@ -33,18 +35,36 @@ func makeOkData(args ...interface{}) (interface{}, string) {
 	return data, msg
 }
 
-func makeErrData(args ...interface{}) (interface{}, string) {
+func makeErrData(args ...interface{}) (interface{}, *Error, int) {
 	var data interface{}
-	var msg = MsgFailed
+	code := 1
+	var appErr *Error
 
 	if len(args) >= 1 {
-		msg = args[0].(string)
+		first := args[0]
+		paramType := reflect.TypeOf(first)
+		if paramType.Kind() == reflect.String {
+			appErr = NewErrMsg(first.(string))
+		} else {
+			if paramType.String() == "*flat.Error" {
+				appErr = first.(*Error)
+			} else {
+				appErr = NewErr(first.(error))
+			}
+		}
+	} else {
+		appErr = NewErrMsg(MsgFailed)
 	}
 
 	if len(args) >= 2 {
 		data = args[1]
 	}
-	return data, msg
+
+	if len(args) >= 3 {
+		code = args[2].(int)
+	}
+
+	return data, appErr, code
 }
 
 // JsonOk(ctx, data, msg)
@@ -55,8 +75,19 @@ func JsonOk(ctx *gin.Context, args ...interface{}) {
 
 // JsonErr(ctx, msg, data)
 func JsonErr(ctx *gin.Context, args ...interface{}) {
-	data, msg := makeErrData(args...)
-	ctx.JSON(http.StatusOK, jsonBaseFormat(1, msg, data))
+	data, msg, code := makeErrData(args...)
+
+	errMsgs := ctx.Errors
+	ctx.Errors = append(errMsgs, &gin.Error{
+		Err:  errors.New(msg.Error()),
+		Type: gin.ErrorTypePrivate,
+		Meta: map[string]interface{}{
+			"file": msg.File(),
+			"line": msg.Line(),
+		},
+	})
+
+	ctx.JSON(http.StatusOK, jsonBaseFormat(code, msg.Error(), data))
 }
 
 func jsonBaseFormat(code int, msg string, data interface{}) interface{} {
@@ -65,16 +96,4 @@ func jsonBaseFormat(code int, msg string, data interface{}) interface{} {
 	baseData["msg"] = msg
 	baseData["data"] = data
 	return baseData
-}
-
-// JsonError(ctx, code, msg)
-func JsonError(ctx *gin.Context, code int, msg string) {
-	ctx.JSON(http.StatusOK, jsonErrorFormat(code, msg))
-}
-
-func jsonErrorFormat(code int, msg string) interface{} {
-	var errData = make(map[string]interface{})
-	errData["errno"] = code
-	errData["msg"] = msg
-	return errData
 }
