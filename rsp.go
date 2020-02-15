@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"reflect"
 )
 
 const MsgSuccess = "Success"
@@ -42,15 +41,12 @@ func makeErrData(args ...interface{}) (interface{}, *Error, int) {
 
 	if len(args) >= 1 {
 		first := args[0]
-		paramType := reflect.TypeOf(first)
-		if paramType.Kind() == reflect.String {
-			appErr = NewErrMsg(first.(string))
+		if tmpRsp, ok := first.(*Error); ok {
+			appErr = tmpRsp
+		} else if tmpErr, ok := first.(error); ok {
+			appErr = NewErr(tmpErr)
 		} else {
-			if paramType.String() == "*flat.Error" {
-				appErr = first.(*Error)
-			} else {
-				appErr = NewErr(first.(error))
-			}
+			appErr = NewErrMsg(first.(string))
 		}
 	} else {
 		appErr = NewErrMsg(MsgFailed)
