@@ -3,7 +3,9 @@ package rsp
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/render"
 	"net/http"
+	"regexp"
 )
 
 const MsgSuccess = "Success"
@@ -11,12 +13,27 @@ const MsgFailed = "Failed"
 
 func JsonpOK(ctx *gin.Context, args ...interface{}) {
 	data, msg := makeOkData(args...)
-	ctx.JSONP(http.StatusOK, jsonBaseFormat(0, msg, data))
+	safeJsonP(ctx, http.StatusOK, jsonBaseFormat(0, msg, data))
 }
 
 func JsonpErr(ctx *gin.Context, args ...interface{}) {
 	data, msg, code := makeErrData(args...)
-	ctx.JSONP(http.StatusOK, jsonBaseFormat(code, msg.Error(), data))
+	safeJsonP(ctx, http.StatusOK, jsonBaseFormat(code, msg.Error(), data))
+}
+
+func safeJsonP(ctx *gin.Context, code int, obj interface{}) {
+	callback := ctx.DefaultQuery("callback", "")
+	if callback == "" {
+		ctx.Render(code, render.JSON{Data: obj})
+		return
+	}
+
+	if !regexp.MustCompile(`^[\w-.]{1,30}$`).MatchString(callback) {
+		ctx.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+
+	ctx.Render(code, render.JsonpJSON{Callback: callback, Data: obj})
 }
 
 func makeOkData(args ...interface{}) (interface{}, string) {
