@@ -28,7 +28,7 @@ func safeJsonP(ctx *gin.Context, code int, obj interface{}) {
 		return
 	}
 
-	if !regexp.MustCompile(`^[\w-.]{1,30}$`).MatchString(callback) {
+	if !regexp.MustCompile(`^[\w-.]{1,64}$`).MatchString(callback) {
 		ctx.AbortWithStatus(http.StatusForbidden)
 		return
 	}
