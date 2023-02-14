@@ -1,7 +1,6 @@
 package rsp
 
 import (
-	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/render"
 	"net/http"
@@ -80,26 +79,15 @@ func makeErrData(args ...interface{}) (interface{}, *Error, int) {
 	return data, appErr, code
 }
 
-// JsonOk(ctx, data, msg)
+// JsonOk (ctx, data, msg)
 func JsonOk(ctx *gin.Context, args ...interface{}) {
 	data, msg := makeOkData(args...)
 	ctx.JSON(http.StatusOK, jsonBaseFormat(0, msg, data))
 }
 
-// JsonErr(ctx, msg, data)
+// JsonErr (ctx, msg, data)
 func JsonErr(ctx *gin.Context, args ...interface{}) {
 	data, msg, code := makeErrData(args...)
-
-	errMsgs := ctx.Errors
-	ctx.Errors = append(errMsgs, &gin.Error{
-		Err:  errors.New(msg.Error()),
-		Type: gin.ErrorTypePrivate,
-		Meta: map[string]interface{}{
-			"file": msg.File(),
-			"line": msg.Line(),
-		},
-	})
-
 	ctx.JSON(http.StatusOK, jsonBaseFormat(code, msg.Error(), data))
 }
 
